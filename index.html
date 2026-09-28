@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10초 타이머</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Tailwind slate-900 */
+        }
+
+        .timer-font {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.05s linear;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        .btn-hover {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .btn-hover:active {
+            transform: scale(0.95);
+        }
+
+        /* Pulse animation when timer finishes */
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        
+        .timer-done .ring-bg {
+            stroke: #ef4444; /* red-500 */
+            transition: stroke 0.3s ease;
+        }
+        
+        .timer-done .time-text {
+            color: #ef4444;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="text-white flex items-center justify-center min-h-screen m-0 overflow-hidden select-none">
+
+    <div class="flex flex-col items-center p-8 bg-slate-800 rounded-3xl shadow-2xl border border-slate-700 w-full max-w-sm mx-4">
+        <h1 class="text-2xl font-bold mb-8 text-slate-300">10초 타이머</h1>
+
+        <!-- Timer Circle -->
+        <div class="relative flex items-center justify-center mb-10 w-64 h-64" id="timer-container">
+            <svg class="w-full h-full absolute" viewBox="0 0 256 256">
+                <!-- Background Ring -->
+                <circle class="ring-bg text-slate-700 stroke-current" stroke-width="12" cx="128" cy="128" r="110" fill="transparent"></circle>
+                <!-- Progress Ring -->
+                <circle id="progress-circle" class="progress-ring__circle text-cyan-400 stroke-current" stroke-width="12" stroke-linecap="round" cx="128" cy="128" r="110" fill="transparent"></circle>
+            </svg>
+            <!-- Time Display -->
+            <div class="absolute flex flex-col items-center">
+                <span id="time-display" class="timer-font text-5xl font-bold text-white tracking-wider time-text">10.00</span>
+                <span class="text-slate-400 text-sm mt-1 uppercase tracking-widest font-semibold">초</span>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="grid grid-cols-3 gap-4 w-full">
+            <button id="start-btn" class="btn-hover bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-4 rounded-xl shadow-lg shadow-cyan-500/30 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                시작
+            </button>
+            <button id="pause-btn" class="btn-hover bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg disabled:opacity-50 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                일시정지
+            </button>
+            <button id="reset-btn" class="btn-hover bg-rose-500 hover:bg-rose-400 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-rose-500/30 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                초기화
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const INITIAL_TIME_MS = 10000; // 10 seconds
+        let remainingTime = INITIAL_TIME_MS;
+        let isRunning = false;
+        let lastTime = 0;
+        let animationFrameId = null;
+
+        // DOM Elements
+        const display = document.getElementById('time-display');
+        const circle = document.getElementById('progress-circle');
+        const startBtn = document.getElementById('start-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const timerContainer = document.getElementById('timer-container');
+
+        // Circle Math (r=110)
+        const radius = circle.r.baseVal.value;
+        const circumference = radius * 2 * Math.PI;
+        
+        // Initialize circle
+        circle.style.strokeDasharray = `${circumference} ${circumference}`;
+        circle.style.strokeDashoffset = circumference; // Start fully hidden? No, full ring to empty.
+        
+        // Actually, we want it full at start and drain down.
+        // offset 0 = full, offset circumference = empty
+        
+        function updateUI() {
+            // Update Text (SS.ms format)
+            const seconds = Math.max(0, remainingTime / 1000);
+            display.textContent = seconds.toFixed(2);
+
+            // Update Circle
+            const progress = remainingTime / INITIAL_TIME_MS;
+            // offset = 0 is full, offset = circumference is empty
+            const offset = circumference - (progress * circumference);
+            circle.style.strokeDashoffset = offset;
+
+            // Update Finish State
+            if (remainingTime <= 0) {
+                timerContainer.classList.add('timer-done');
+                circle.style.opacity = '0'; // Hide the progress ring when done, just show red background
+            } else {
+                timerContainer.classList.remove('timer-done');
+                circle.style.opacity = '1';
+            }
+        }
+
+        function timerLoop(timestamp) {
+            if (!isRunning) return;
+
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            remainingTime -= deltaTime;
+
+            if (remainingTime <= 0) {
+                remainingTime = 0;
+                isRunning = false;
+                updateUI();
+                return;
+            }
+
+            updateUI();
+            animationFrameId = requestAnimationFrame(timerLoop);
+        }
+
+        // Event Listeners
+        startBtn.addEventListener('click', () => {
+            if (!isRunning && remainingTime > 0) {
+                isRunning = true;
+                lastTime = performance.now();
+                animationFrameId = requestAnimationFrame(timerLoop);
+            }
+        });
+
+        pauseBtn.addEventListener('click', () => {
+            if (isRunning) {
+                isRunning = false;
+                cancelAnimationFrame(animationFrameId);
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            isRunning = false;
+            cancelAnimationFrame(animationFrameId);
+            remainingTime = INITIAL_TIME_MS;
+            updateUI();
+        });
+
+        // Initialize UI on load
+        updateUI();
+    </script>
+</body>
+</html>
